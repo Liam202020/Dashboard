@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ethereum On-Chain Signal Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="data.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--text2:#8b949e;--green:#3fb950;--red:#f85149;--blue:#58a6ff;--yellow:#d29922;--purple:#bc8cff;--orange:#f0883e;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px}
+.header h1{font-size:20px;font-weight:600;color:#f0f6fc}
+.header .subtitle{color:var(--text2);font-size:13px}
+.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;gap:0;overflow-x:auto}
+.tab-btn{padding:12px 20px;cursor:pointer;color:var(--text2);border:none;background:none;font-size:14px;font-weight:500;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-content{display:none;padding:24px;max-width:1600px;margin:0 auto}
+.tab-content.active{display:block}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+.kpi .label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kpi .value{font-size:24px;font-weight:700}
+.kpi .sub{font-size:11px;color:var(--text2);margin-top:4px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.chart-card h3{font-size:14px;font-weight:600;margin-bottom:12px;color:#f0f6fc}
+.chart-wrap{position:relative;width:100%;height:320px}
+.chart-wrap.short{height:220px}
+.chart-wrap.tall{height:400px}
+.chart-wrap.mini{height:140px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.row4{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.range-btns{display:flex;gap:4px;margin-bottom:8px}
+.range-btn{padding:4px 10px;border:1px solid var(--border);background:var(--card);color:var(--text2);border-radius:4px;cursor:pointer;font-size:12px}
+.range-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.section-title{font-size:16px;font-weight:600;color:#f0f6fc;margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+table.data-table{width:100%;border-collapse:collapse;font-size:12px}
+table.data-table th,table.data-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+table.data-table th{background:var(--bg);color:var(--text2);font-weight:600;position:sticky;top:0;cursor:pointer;user-select:none}
+table.data-table th:hover{color:var(--text)}
+table.data-table tr:hover{background:rgba(88,166,255,.06)}
+.table-wrap{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.filter-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filter-btn{padding:4px 12px;border:1px solid var(--border);background:var(--card);color:var(--text2);border-radius:16px;cursor:pointer;font-size:12px}
+.filter-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.weight-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:8px}
+.weight-seg{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff}
+.disc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:16px}
+.disc-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px}
+.disc-card h4{font-size:13px;font-weight:600;margin-bottom:8px}
+.disc-card .item{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)}
+.disc-card .item:last-child{border:none}
+.heatmap-wrap{overflow-x:auto}
+.heatmap{border-collapse:collapse;font-size:11px;width:100%}
+.heatmap th,.heatmap td{padding:6px 8px;text-align:center;border:1px solid var(--border);min-width:50px}
+.heatmap th{background:var(--bg);color:var(--text2);font-weight:600}
+.mini-bar{display:inline-block;height:14px;border-radius:2px}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--yellow)}
+@media(max-width:900px){.row2,.row3{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Ethereum On-Chain Signal Dashboard</h1>
+    <div class="subtitle">Composite signal regime strategy &middot; Updated <span id="lastDate"></span></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab1">Signal &amp; Regime</button>
+  <button class="tab-btn" data-tab="tab2">Performance</button>
+  <button class="tab-btn" data-tab="tab3">On-Chain Flows</button>
+  <button class="tab-btn" data-tab="tab4">Z-Scores</button>
+  <button class="tab-btn" data-tab="tab5">Graph-Analyse</button>
+</div>
+
+<div id="tab1" class="tab-content active"></div>
+<div id="tab2" class="tab-content"></div>
+<div id="tab3" class="tab-content"></div>
+<div id="tab4" class="tab-content"></div>
+<div id="tab5" class="tab-content"></div>
+
+<script>
+/* ===== HELPERS ===== */
+const charts = {};
+const built = {};
+
+function hex2rgba(hex, a) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function thin(days, ...arrs) {
+  const step = Math.max(1, Math.floor(days.length / 600));
+  if (step <= 1) return [days, ...arrs];
+  const keep = (_, i) => i % step === 0 || i === days.length - 1;
+  return [days.filter(keep), ...arrs.map(a => a ? a.filter(keep) : a)];
+}
+
+function regimeBands(days, regimes) {
+  const ann = {};
+  let start = 0, cur = regimes[0];
+  for (let i = 1; i <= days.length; i++) {
+    const r = i < days.length ? regimes[i] : null;
+    if (r !== cur) {
+      if (cur && cur !== 'NEUTRAL') {
+        ann['b' + i] = {
+          type: 'box', xMin: days[start], xMax: days[i-1],
+          backgroundColor: cur === 'POSITIVE' ? 'rgba(63,185,80,0.12)' : 'rgba(248,81,73,0.12)',
+          borderWidth: 0, drawTime: 'beforeDatasetsDraw'
+        };
+      }
+      cur = r; start = i;
+    }
+  }
+  return ann;
+}
+
+function fmt(v, d=1) {
+  if (v == null) return '—';
+  if (Math.abs(v) >= 1e9) return (v/1e9).toFixed(d) + 'B';
+  if (Math.abs(v) >= 1e6) return (v/1e6).toFixed(d) + 'M';
+  if (Math.abs(v) >= 1e3) return (v/1e3).toFixed(d) + 'K';
+  return Number(v).toFixed(d);
+}
+
+function pct(v) { return v != null ? v.toFixed(1) + '%' : '—'; }
+
+function safe(arr) { return arr ? arr.map(v => v == null ? null : v) : []; }
+
+function makeChart(canvasId, cfg) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  cfg.options = cfg.options || {};
+  cfg.options.animation = false;
+  cfg.options.responsive = true;
+  cfg.options.maintainAspectRatio = false;
+  if (!cfg.options.plugins) cfg.options.plugins = {};
+  if (!cfg.options.plugins.legend) cfg.options.plugins.legend = {};
+  cfg.options.plugins.legend.labels = Object.assign({color:'#c9d1d9', boxWidth:12, padding:8, font:{size:11}}, cfg.options.plugins.legend.labels||{});
+  const ch = new Chart(canvas, cfg);
+  charts[canvasId] = ch;
+  return ch;
+}
+
+function timeAxis(min) {
+  return {type:'time', time:{unit:'month', tooltipFormat:'yyyy-MM-dd'}, min: min||undefined, ticks:{color:'#8b949e',maxTicksAuto:true,font:{size:10}}, grid:{color:'rgba(48,54,61,.5)'}};
+}
+
+function linAxis(label, opts) {
+  return Object.assign({ticks:{color:'#8b949e',font:{size:10}}, grid:{color:'rgba(48,54,61,.5)'}, title:{display:!!label,text:label||'',color:'#8b949e'}}, opts||{});
+}
+
+function logAxis(label, opts) {
+  return Object.assign(linAxis(label), {type:'logarithmic'}, opts||{});
+}
+
+function rangeButtons(containerSel, chartId, days) {
+  const container = document.querySelector(containerSel);
+  if (!container) return;
+  const btns = container.querySelectorAll('.range-btn');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const range = btn.dataset.range;
+      const ch = charts[chartId];
+      if (!ch) return;
+      let minDate;
+      if (range !== 'all') {
+        const last = days[days.length-1];
+        const d = luxon.DateTime.fromISO(last);
+        const months = range === '3m' ? 3 : range === '6m' ? 6 : 12;
+        minDate = d.minus({months}).toISODate();
+      }
+      ch.options.scales.x.min = minDate || undefined;
+      ch.update();
+    });
+  });
+}
+
+function rangeBtnsHTML(id) {
+  return `<div class="range-btns" id="${id}">
+    <button class="range-btn" data-range="3m">3M</button>
+    <button class="range-btn" data-range="6m">6M</button>
+    <button class="range-btn" data-range="1y">1J</button>
+    <button class="range-btn active" data-range="all">All</button>
+  </div>`;
+}
+
+function cc(id, h='') { return `<div class="chart-card">${h?'<h3>'+h+'</h3>':''}<div class="chart-wrap"><canvas id="${id}"></canvas></div></div>`; }
+function ccH(id, h, cls) { return `<div class="chart-card"><h3>${h}</h3><div class="chart-wrap ${cls||''}"><canvas id="${id}"></canvas></div></div>`; }
+
+function last(arr) { for (let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return arr[i]; return null; }
+
+function regimeColor(r) { return r==='POSITIVE'?'var(--green)':r==='NEGATIVE'?'var(--red)':'var(--yellow)'; }
+
+/* ===== TAB SWITCHING ===== */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.tab;
+    document.getElementById(t).classList.add('active');
+    if (!built[t]) { builders[t](); built[t] = true; }
+  });
+});
+
+/* ===== BUILDERS ===== */
+const builders = {};
+
+/* ---------- TAB 1: Signal & Regime ---------- */
+builders.tab1 = function() {
+  const S = DATA.signal, M = DATA.overall_metrics;
+  const el = document.getElementById('tab1');
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Current Regime</div><div class="value" style="color:${regimeColor(M.latest_regime)}">${M.latest_regime}</div><div class="sub">${M.latest_date}</div></div>
+      <div class="kpi"><div class="label">Composite Score</div><div class="value">${M.latest_score.toFixed(4)}</div><div class="sub">Norm: ${M.latest_norm.toFixed(4)}</div></div>
+      <div class="kpi"><div class="label">% Positive</div><div class="value pos">${pct(M.pct_positive)}</div></div>
+      <div class="kpi"><div class="label">% Negative</div><div class="value neg">${pct(M.pct_negative)}</div></div>
+      <div class="kpi"><div class="label">% Neutral</div><div class="value neu">${pct(M.pct_neutral)}</div></div>
+      <div class="kpi"><div class="label">Transitions</div><div class="value">${M.transitions}</div></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>ETH Price with Regime Overlay</h3>
+      ${rangeBtnsHTML('priceRange')}
+      <div class="chart-wrap tall"><canvas id="chPrice"></canvas></div>
+    </div>
+
+    <div class="row2">
+      ${ccH('chEma','Composite EMA Score','')}
+      ${ccH('chNorm','Normalized Score','')}
+    </div>
+    <div class="row2">
+      ${ccH('chDonut','Regime Distribution','short')}
+      ${ccH('chPos','Position (1=Long, 0=Cash)','short')}
+    </div>
+
+    <div class="chart-card">
+      <h3>Signal Weights</h3>
+      <div class="weight-bar">
+        <div class="weight-seg" style="width:25%;background:#3fb950" title="z_dex 25%">DEX 25%</div>
+        <div class="weight-seg" style="width:25%;background:#58a6ff" title="z_cex_stable 25%">CEX-Stable 25%</div>
+        <div class="weight-seg" style="width:15%;background:#d29922" title="z_stable_mint 15%">Mint 15%</div>
+        <div class="weight-seg" style="width:15%;background:#f0883e" title="z_bridge 15%">Bridge 15%</div>
+        <div class="weight-seg" style="width:10%;background:#bc8cff" title="z_stable_vel 10%">Vel 10%</div>
+        <div class="weight-seg" style="width:5%;background:#f85149" title="z_cex_eth 10%">CEX-E</div>
+        <div class="weight-seg" style="width:5%;background:#39d353" title="z_lending 10%">Lend</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2)">z_dex 25% &middot; z_cex_stable 25% &middot; z_stable_mint 15% &middot; z_bridge 15% &middot; z_stable_vel 10% &middot; z_cex_eth 10% &middot; z_lending 10%</div>
+    </div>
+  `;
+
+  // Price chart with regime bands
+  const [td, tp] = thin(S.day, S.eth_price);
+  const bands = regimeBands(S.day, S.regime);
+  makeChart('chPrice', {
+    type:'line',
+    data:{datasets:[{label:'ETH Price', data:td.map((d,i)=>({x:d,y:tp[i]})), borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:logAxis('USD')}, plugins:{annotation:{annotations:bands}}}
+  });
+  rangeButtons('#priceRange','chPrice',S.day);
+
+  // Composite EMA
+  const [te, tce] = thin(S.day, S.composite_ema);
+  makeChart('chEma', {
+    type:'line',
+    data:{datasets:[{label:'Composite EMA', data:te.map((d,i)=>({x:d,y:tce[i]})), borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:linAxis()}, plugins:{annotation:{annotations:{
+      upper:{type:'line',yMin:0.15,yMax:0.15,borderColor:'rgba(63,185,80,.5)',borderWidth:1,borderDash:[4,4]},
+      lower:{type:'line',yMin:-0.15,yMax:-0.15,borderColor:'rgba(248,81,73,.5)',borderWidth:1,borderDash:[4,4]},
+      zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}
+    }}}}
+  });
+
+  // Normalized score
+  const [tn, tcn] = thin(S.day, S.composite_norm);
+  makeChart('chNorm', {
+    type:'line',
+    data:{datasets:[
+      {label:'Norm > 0', data:tn.map((d,i)=>({x:d,y:tcn[i]!=null&&tcn[i]>=0?tcn[i]:null})), borderColor:'#3fb950', backgroundColor:hex2rgba('#3fb950',.15), borderWidth:1.5, pointRadius:0, fill:'origin', spanGaps:false},
+      {label:'Norm < 0', data:tn.map((d,i)=>({x:d,y:tcn[i]!=null&&tcn[i]<0?tcn[i]:null})), borderColor:'#f85149', backgroundColor:hex2rgba('#f85149',.15), borderWidth:1.5, pointRadius:0, fill:'origin', spanGaps:false}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis()}, plugins:{annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.4)',borderWidth:1}}}}}
+  });
+
+  // Regime donut
+  makeChart('chDonut', {
+    type:'doughnut',
+    data:{labels:['Positive','Negative','Neutral'], datasets:[{data:[M.pct_positive,M.pct_negative,M.pct_neutral], backgroundColor:['#3fb950','#f85149','#d29922'], borderWidth:0}]},
+    options:{cutout:'60%', plugins:{legend:{position:'bottom'}}}
+  });
+
+  // Position
+  const [tpd, tpp] = thin(S.day, S.position);
+  makeChart('chPos', {
+    type:'line',
+    data:{datasets:[{label:'Position', data:tpd.map((d,i)=>({x:d,y:tpp[i]})), borderColor:'#58a6ff', borderWidth:2, pointRadius:0, fill:false, stepped:'before'}]},
+    options:{scales:{x:timeAxis(), y:linAxis(null,{min:-0.1,max:1.1,ticks:{stepSize:1,callback:v=>v===1?'Long':'Cash'}})}}
+  });
+};
+
+/* ---------- TAB 2: Performance ---------- */
+builders.tab2 = function() {
+  const S = DATA.signal, M = DATA.overall_metrics, V = DATA.versions, MR = DATA.monthly_returns, PM = DATA.period_metrics;
+  const el = document.getElementById('tab2');
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">CAGR</div><div class="value pos">${pct(M.cagr)}</div><div class="sub">ETH: ${pct(M.eth_cagr)}</div></div>
+      <div class="kpi"><div class="label">Sharpe</div><div class="value">${M.sharpe.toFixed(3)}</div><div class="sub">ETH: ${M.eth_sharpe.toFixed(3)}</div></div>
+      <div class="kpi"><div class="label">Calmar</div><div class="value">${M.calmar.toFixed(3)}</div></div>
+      <div class="kpi"><div class="label">Max Drawdown</div><div class="value neg">${pct(M.max_drawdown)}</div><div class="sub">ETH: ${pct(M.eth_max_drawdown)}</div></div>
+      <div class="kpi"><div class="label">Total Return</div><div class="value pos">${pct(M.total_return)}</div><div class="sub">ETH: ${pct(M.eth_total_return)}</div></div>
+      <div class="kpi"><div class="label">Outperformance</div><div class="value pos">${pct(M.outperformance)}</div></div>
+      <div class="kpi"><div class="label">Volatility</div><div class="value">${pct(M.volatility)}</div><div class="sub">ETH: ${pct(M.eth_volatility)}</div></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Equity Curve (Strategy vs ETH)</h3>
+      ${rangeBtnsHTML('eqRange')}
+      <div class="chart-wrap tall"><canvas id="chEquity"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Drawdown Analysis</h3>
+      <div class="chart-wrap"><canvas id="chDD"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Signal Versions Comparison</h3>
+      <div class="chart-wrap tall"><canvas id="chVersions"></canvas></div>
+    </div>
+
+    <div class="row2">
+      ${ccH('chRolling','Rolling 90-Day Return','')}
+      ${ccH('chAnnual','Annual Returns','')}
+    </div>
+
+    <div class="chart-card">
+      <h3>Monthly Alpha</h3>
+      <div class="chart-wrap"><canvas id="chMonthlyAlpha"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Monthly Returns Heatmap</h3>
+      <div class="heatmap-wrap" id="heatmapWrap"></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Period Analysis</h3>
+      <div class="table-wrap" id="periodTable"></div>
+    </div>
+  `;
+
+  // Equity curve
+  const [te, tsc, tec] = thin(S.day, S.strat_cum, S.eth_cum);
+  const eqBands = regimeBands(S.day, S.regime);
+  makeChart('chEquity', {
+    type:'line',
+    data:{datasets:[
+      {label:'Strategy', data:te.map((d,i)=>({x:d,y:tsc[i]})), borderColor:'#58a6ff', borderWidth:2, pointRadius:0, fill:false},
+      {label:'ETH B&H', data:te.map((d,i)=>({x:d,y:tec[i]})), borderColor:'#8b949e', borderWidth:1.5, pointRadius:0, fill:false, borderDash:[4,4]}
+    ]},
+    options:{scales:{x:timeAxis(), y:logAxis('Cumulative')}, plugins:{annotation:{annotations:eqBands}}}
+  });
+  rangeButtons('#eqRange','chEquity',S.day);
+
+  // Drawdown
+  const stratDD = [], ethDD = [];
+  let sPeak = -Infinity, ePeak = -Infinity;
+  for (let i = 0; i < S.strat_cum.length; i++) {
+    const sv = S.strat_cum[i], ev = S.eth_cum[i];
+    if (sv != null && sv > sPeak) sPeak = sv;
+    if (ev != null && ev > ePeak) ePeak = ev;
+    stratDD.push(sv != null && sPeak > 0 ? ((sv - sPeak) / sPeak) * 100 : 0);
+    ethDD.push(ev != null && ePeak > 0 ? ((ev - ePeak) / ePeak) * 100 : 0);
+  }
+  const [tdd, tsdd, tedd] = thin(S.day, stratDD, ethDD);
+  makeChart('chDD', {
+    type:'line',
+    data:{datasets:[
+      {label:'Strategy DD', data:tdd.map((d,i)=>({x:d,y:tsdd[i]})), borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, fill:true, backgroundColor:hex2rgba('#58a6ff',.1)},
+      {label:'ETH DD', data:tdd.map((d,i)=>({x:d,y:tedd[i]})), borderColor:'#8b949e', borderWidth:1, pointRadius:0, fill:false, borderDash:[4,4]}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('%',{max:0})}}
+  });
+
+  // Versions comparison
+  const vColors = {v2:'#f85149',v3:'#d29922',v4:'#bc8cff',v5:'#3fb950',final:'#58a6ff'};
+  const vds = [];
+  for (const vk of ['v2','v3','v4','v5','final']) {
+    const vd = V[vk];
+    if (!vd) continue;
+    const [vdays, vcum] = thin(vd.day, vd.strat_cum);
+    vds.push({label:`${vk} (CAGR ${vd.cagr}%)`, data:vdays.map((d,i)=>({x:d,y:vcum[i]})), borderColor:vColors[vk], borderWidth:vk==='final'?2.5:1.5, pointRadius:0, fill:false, borderDash:vk==='final'?[]:[3,3]});
+  }
+  makeChart('chVersions', {
+    type:'line',
+    data:{datasets:vds},
+    options:{scales:{x:timeAxis(), y:logAxis('Cumulative')}}
+  });
+
+  // Rolling 90-day return
+  const roll90s = [], roll90e = [];
+  for (let i = 0; i < S.day.length; i++) {
+    if (i < 90) { roll90s.push(null); roll90e.push(null); continue; }
+    const sr = S.strat_cum[i] != null && S.strat_cum[i-90] != null && S.strat_cum[i-90] !== 0 ? ((S.strat_cum[i]/S.strat_cum[i-90])-1)*100 : null;
+    const er = S.eth_cum[i] != null && S.eth_cum[i-90] != null && S.eth_cum[i-90] !== 0 ? ((S.eth_cum[i]/S.eth_cum[i-90])-1)*100 : null;
+    roll90s.push(sr);
+    roll90e.push(er);
+  }
+  const [tr9d, tr9s, tr9e] = thin(S.day, roll90s, roll90e);
+  makeChart('chRolling', {
+    type:'line',
+    data:{datasets:[
+      {label:'Strategy 90d', data:tr9d.map((d,i)=>({x:d,y:tr9s[i]})), borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, fill:false},
+      {label:'ETH 90d', data:tr9d.map((d,i)=>({x:d,y:tr9e[i]})), borderColor:'#8b949e', borderWidth:1, pointRadius:0, fill:false, borderDash:[4,4]}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('%')}, plugins:{annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // Annual returns
+  const years = {};
+  MR.forEach(m => {
+    const y = m.month.slice(0,4);
+    if (!years[y]) years[y] = {strat:0, eth:0, stratProd:1, ethProd:1};
+    years[y].stratProd *= (1 + m.strat/100);
+    years[y].ethProd *= (1 + m.eth/100);
+  });
+  const yLabels = Object.keys(years).sort();
+  const yStrat = yLabels.map(y => (years[y].stratProd - 1) * 100);
+  const yEth = yLabels.map(y => (years[y].ethProd - 1) * 100);
+  makeChart('chAnnual', {
+    type:'bar',
+    data:{labels:yLabels, datasets:[
+      {label:'Strategy', data:yStrat, backgroundColor:'#58a6ff'},
+      {label:'ETH', data:yEth, backgroundColor:'#8b949e'}
+    ]},
+    options:{scales:{x:{ticks:{color:'#8b949e'}}, y:linAxis('%')}, plugins:{legend:{position:'top'}}}
+  });
+
+  // Monthly alpha bar
+  const mLabels = MR.map(m=>m.month);
+  const mAlpha = MR.map(m=>m.alpha);
+  makeChart('chMonthlyAlpha', {
+    type:'bar',
+    data:{labels:mLabels, datasets:[{label:'Alpha', data:mAlpha, backgroundColor:mAlpha.map(v=>v>=0?hex2rgba('#3fb950',.7):hex2rgba('#f85149',.7))}]},
+    options:{scales:{x:{ticks:{color:'#8b949e',maxRotation:90,font:{size:9}}}, y:linAxis('%')}, plugins:{legend:{display:false}}}
+  });
+
+  // Monthly returns heatmap
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const heatYears = {};
+  MR.forEach(m => {
+    const [y, mo] = m.month.split('-');
+    if (!heatYears[y]) heatYears[y] = {};
+    heatYears[y][parseInt(mo)] = m;
+  });
+  const sortedYears = Object.keys(heatYears).sort();
+  let hHtml = '<table class="heatmap"><thead><tr><th>Year</th>';
+  months.forEach(m => hHtml += `<th>${m}</th>`);
+  hHtml += '<th>Total</th></tr></thead><tbody>';
+  sortedYears.forEach(y => {
+    hHtml += `<tr><td style="font-weight:600">${y}</td>`;
+    let yTotal = 1;
+    months.forEach((_, mi) => {
+      const d = heatYears[y][mi+1];
+      if (d) {
+        const v = d.strat;
+        yTotal *= (1 + v/100);
+        const intensity = Math.min(Math.abs(v)/30, 1);
+        const bg = v >= 0 ? `rgba(63,185,80,${intensity*.5})` : `rgba(248,81,73,${intensity*.5})`;
+        hHtml += `<td style="background:${bg};color:${v>=0?'#3fb950':'#f85149'}">${v.toFixed(1)}%</td>`;
+      } else {
+        hHtml += '<td>—</td>';
+      }
+    });
+    const tot = (yTotal-1)*100;
+    const bg2 = tot >= 0 ? 'rgba(63,185,80,.2)' : 'rgba(248,81,73,.2)';
+    hHtml += `<td style="background:${bg2};font-weight:600;color:${tot>=0?'#3fb950':'#f85149'}">${tot.toFixed(1)}%</td></tr>`;
+  });
+  hHtml += '</tbody></table>';
+  document.getElementById('heatmapWrap').innerHTML = hHtml;
+
+  // Period analysis table
+  let pHtml = '<table class="data-table"><thead><tr><th>Period</th><th>Start</th><th>End</th><th>Days</th><th>ETH Return</th><th>Strategy Return</th><th>Alpha</th><th>Days +/-</th></tr></thead><tbody>';
+  PM.forEach(p => {
+    const alpha = p.strat_ret - p.eth_ret;
+    pHtml += `<tr>
+      <td style="font-weight:600">${p.name}</td>
+      <td>${p.start}</td><td>${p.end}</td><td>${p.total_days}</td>
+      <td class="${p.eth_ret>=0?'pos':'neg'}">${pct(p.eth_ret)}</td>
+      <td class="${p.strat_ret>=0?'pos':'neg'}">${pct(p.strat_ret)}</td>
+      <td class="${alpha>=0?'pos':'neg'}">${pct(alpha)}</td>
+      <td><span class="pos">${p.days_positive}</span> / <span class="neg">${p.days_negative}</span></td>
+    </tr>`;
+  });
+  pHtml += '</tbody></table>';
+  document.getElementById('periodTable').innerHTML = pHtml;
+};
+
+/* ---------- TAB 3: On-Chain Flows ---------- */
+builders.tab3 = function() {
+  const DEX = DATA.dex, CEX = DATA.cex, LEN = DATA.lending, BR = DATA.bridge, BL = DATA.bridge_l2, ST = DATA.stable, TN = DATA.token_net, TV = DATA.token_vol;
+  const el = document.getElementById('tab3');
+
+  const lastDex7d = last(DEX.vol_7d_ma);
+  const lastCexEth = last(CEX.eth_net);
+  const lastCexStable = last(CEX.stable_net_m);
+  const lastBridge = last(BR.net_m);
+  const lastLend = last(LEN.net_m);
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">DEX Vol 7d MA</div><div class="value">$${fmt(lastDex7d)}</div></div>
+      <div class="kpi"><div class="label">CEX ETH Net</div><div class="value" style="color:${lastCexEth>=0?'var(--green)':'var(--red)'}">${fmt(lastCexEth)} ETH</div></div>
+      <div class="kpi"><div class="label">CEX Stable Net</div><div class="value">$${fmt(lastCexStable)}M</div></div>
+      <div class="kpi"><div class="label">Bridge Net</div><div class="value">$${fmt(lastBridge)}M</div></div>
+      <div class="kpi"><div class="label">Lending Net</div><div class="value">$${fmt(lastLend)}M</div></div>
+    </div>
+
+    <div class="section-title">DEX Volume</div>
+    <div class="chart-card">
+      <h3>Total DEX Volume + 7d MA</h3>
+      ${rangeBtnsHTML('dexRange')}
+      <div class="chart-wrap tall"><canvas id="chDexVol"></canvas></div>
+    </div>
+    ${ccH('chDexStack','DEX Volume by Protocol','')}
+
+    <div class="section-title">CEX Flows</div>
+    <div class="row2">
+      ${ccH('chCexEth','CEX ETH Net Flow','')}
+      ${ccH('chCexStable','CEX Stablecoin Net Flow','')}
+    </div>
+    ${ccH('chCexBi','CEX ETH Inflow vs Outflow','')}
+
+    <div class="section-title">Lending</div>
+    <div class="row2">
+      ${ccH('chLendNet','Lending Net Flow','')}
+      ${ccH('chLendStack','Lending Inflow vs Outflow','')}
+    </div>
+
+    <div class="section-title">Bridge Flows</div>
+    <div class="row2">
+      ${ccH('chBridgeNet','Bridge Total Net Flow','')}
+      ${ccH('chBridgeStack','L2 Bridge Volume Stacked','')}
+    </div>
+    <div class="row3" id="l2Minis">
+      ${['Arbitrum','Optimism','Base','zkSync','Polygon','Starknet'].map((n,i)=>`<div class="chart-card"><h3>${n}</h3><div class="chart-wrap mini"><canvas id="chL2_${i}"></canvas></div></div>`).join('')}
+    </div>
+
+    <div class="section-title">Stablecoin Flows</div>
+    <div class="row2">
+      ${ccH('chStableNet','Net Mint/Burn','')}
+      ${ccH('chStableToken','Per-Token Net Mint Stacked','')}
+    </div>
+    <div class="row2">
+      ${ccH('chStableVol','Transfer Volume','')}
+      ${ccH('chStableMB','Mint vs Burn','')}
+    </div>
+  `;
+
+  // DEX total + 7d MA
+  const [dd, dv, dma] = thin(DEX.day, DEX.total_dex_volume_usd, DEX.vol_7d_ma);
+  makeChart('chDexVol', {
+    type:'bar',
+    data:{datasets:[
+      {type:'bar', label:'Volume', data:dd.map((d,i)=>({x:d,y:dv[i]})), backgroundColor:hex2rgba('#58a6ff',.3), borderColor:'#58a6ff', borderWidth:0, barPercentage:1, categoryPercentage:1, order:2},
+      {type:'line', label:'7d MA', data:dd.map((d,i)=>({x:d,y:dma[i]})), borderColor:'#f0883e', borderWidth:2, pointRadius:0, fill:false, order:1}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('USD')}}
+  });
+  rangeButtons('#dexRange','chDexVol',DEX.day);
+
+  // DEX stacked
+  const protos = ['uniswap_volume','curve_volume','balancer_volume','sushi_volume','other_volume'];
+  const pNames = ['Uniswap','Curve','Balancer','Sushi','Other'];
+  const pColors = ['#3fb950','#58a6ff','#bc8cff','#f85149','#8b949e'];
+  const [dsd, ...dsp] = thin(DEX.day, ...protos.map(p => DEX[p]));
+  makeChart('chDexStack', {
+    type:'bar',
+    data:{datasets: pNames.map((n,i) => ({label:n, data:dsd.map((d,j)=>({x:d,y:dsp[i][j]})), backgroundColor:hex2rgba(pColors[i],.7), borderWidth:0, barPercentage:1, categoryPercentage:1}))},
+    options:{scales:{x:timeAxis(), y:linAxis('USD',{stacked:true})}, plugins:{legend:{position:'top'}}}
+  });
+
+  // CEX ETH net
+  const [ced, cen] = thin(CEX.day, CEX.eth_net);
+  makeChart('chCexEth', {
+    type:'bar',
+    data:{datasets:[{label:'ETH Net Flow', data:ced.map((d,i)=>({x:d,y:cen[i]})), backgroundColor:cen.map(v=>v!=null&&v>=0?hex2rgba('#3fb950',.6):hex2rgba('#f85149',.6)), borderWidth:0, barPercentage:1, categoryPercentage:1}]},
+    options:{scales:{x:timeAxis(), y:linAxis('ETH')}, plugins:{legend:{display:false}, annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // CEX Stable net
+  const [csd, csn] = thin(CEX.day, CEX.stable_net_m);
+  makeChart('chCexStable', {
+    type:'bar',
+    data:{datasets:[{label:'Stable Net Flow ($M)', data:csd.map((d,i)=>({x:d,y:csn[i]})), backgroundColor:csn.map(v=>v!=null&&v>=0?hex2rgba('#3fb950',.6):hex2rgba('#f85149',.6)), borderWidth:0, barPercentage:1, categoryPercentage:1}]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M')}, plugins:{legend:{display:false}, annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // CEX ETH bi-directional
+  const [cbd, cbi, cbo] = thin(CEX.day, CEX.eth_in, CEX.eth_out);
+  makeChart('chCexBi', {
+    type:'bar',
+    data:{datasets:[
+      {label:'Inflow', data:cbd.map((d,i)=>({x:d,y:cbi[i]})), backgroundColor:hex2rgba('#f85149',.5), borderWidth:0, barPercentage:1, categoryPercentage:1},
+      {label:'Outflow', data:cbd.map((d,i)=>({x:d,y:cbo[i]!=null?-cbo[i]:null})), backgroundColor:hex2rgba('#3fb950',.5), borderWidth:0, barPercentage:1, categoryPercentage:1}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('ETH',{stacked:true})}, plugins:{legend:{position:'top'}}}
+  });
+
+  // Lending net
+  const [ld, ln] = thin(LEN.day, LEN.net_m);
+  makeChart('chLendNet', {
+    type:'line',
+    data:{datasets:[{label:'Net Flow ($M)', data:ld.map((d,i)=>({x:d,y:ln[i]})), borderColor:'#bc8cff', borderWidth:1.5, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M')}, plugins:{annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // Lending in/out stacked
+  const [lsd, lsi, lso] = thin(LEN.day, LEN.inflow_m, LEN.outflow_m);
+  makeChart('chLendStack', {
+    type:'bar',
+    data:{datasets:[
+      {label:'Inflow ($M)', data:lsd.map((d,i)=>({x:d,y:lsi[i]})), backgroundColor:hex2rgba('#3fb950',.5), borderWidth:0, barPercentage:1, categoryPercentage:1},
+      {label:'Outflow ($M)', data:lsd.map((d,i)=>({x:d,y:lso[i]!=null?-lso[i]:null})), backgroundColor:hex2rgba('#f85149',.5), borderWidth:0, barPercentage:1, categoryPercentage:1}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M',{stacked:true})}}
+  });
+
+  // Bridge net
+  const [bd, bn] = thin(BR.day, BR.net_m);
+  makeChart('chBridgeNet', {
+    type:'line',
+    data:{datasets:[{label:'Net to L2 ($M)', data:bd.map((d,i)=>({x:d,y:bn[i]})), borderColor:'#f0883e', borderWidth:1.5, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M')}, plugins:{annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // L2 stacked
+  const l2Colors = {arbitrum:'#2d9cdb',optimism:'#ea3431',zksync:'#9b59b6',base:'#0052ff',polygon:'#8247e5',starknet:'#ec796b'};
+  const l2Names = BL.l2_names || ['arbitrum','optimism','zksync','base','polygon','starknet'];
+  const l2Arrs = l2Names.map(n => BL[n]);
+  const [bsd, ...bsl] = thin(BL.days, ...l2Arrs);
+  makeChart('chBridgeStack', {
+    type:'bar',
+    data:{datasets: l2Names.map((n,i) => ({label:n.charAt(0).toUpperCase()+n.slice(1), data:bsd.map((d,j)=>({x:d,y:bsl[i][j]})), backgroundColor:hex2rgba(l2Colors[n]||'#8b949e',.7), borderWidth:0, barPercentage:1, categoryPercentage:1}))},
+    options:{scales:{x:timeAxis(), y:linAxis('$M',{stacked:true})}}
+  });
+
+  // 6 mini L2 charts
+  l2Names.forEach((n, idx) => {
+    const [md, mv] = thin(BL.days, BL[n]);
+    makeChart('chL2_'+idx, {
+      type:'line',
+      data:{datasets:[{label:n, data:md.map((d,i)=>({x:d,y:mv[i]})), borderColor:l2Colors[n]||'#8b949e', borderWidth:1.5, pointRadius:0, fill:true, backgroundColor:hex2rgba(l2Colors[n]||'#8b949e',.15)}]},
+      options:{scales:{x:timeAxis(), y:linAxis()}, plugins:{legend:{display:false}}}
+    });
+  });
+
+  // Stablecoin net mint
+  const [sd, sn] = thin(ST.day, ST.net_mint_m);
+  makeChart('chStableNet', {
+    type:'line',
+    data:{datasets:[{label:'Net Mint ($M)', data:sd.map((d,i)=>({x:d,y:sn[i]})), borderColor:'#d29922', borderWidth:1.5, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M')}, plugins:{annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+  });
+
+  // Per-token stacked
+  const tokColors = {USDC:'#2775ca',USDT:'#26a17b',DAI:'#f5ac37',BUSD:'#f0b90b',FRAX:'#8c6ecf'};
+  const tokNames = TN.tokens || ['USDC','USDT','DAI','BUSD','FRAX'];
+  const tokArrs = tokNames.map(t => TN[t]);
+  const [tsd, ...tsa] = thin(TN.days, ...tokArrs);
+  makeChart('chStableToken', {
+    type:'bar',
+    data:{datasets: tokNames.map((n,i) => ({label:n, data:tsd.map((d,j)=>({x:d,y:tsa[i][j]})), backgroundColor:hex2rgba(tokColors[n]||'#8b949e',.7), borderWidth:0, barPercentage:1, categoryPercentage:1}))},
+    options:{scales:{x:timeAxis(), y:linAxis('$M',{stacked:true})}}
+  });
+
+  // Transfer volume
+  const [svd, svv] = thin(ST.day, ST.vol_m);
+  makeChart('chStableVol', {
+    type:'line',
+    data:{datasets:[{label:'Transfer Volume ($M)', data:svd.map((d,i)=>({x:d,y:svv[i]})), borderColor:'#39d353', borderWidth:1.5, pointRadius:0, fill:true, backgroundColor:hex2rgba('#39d353',.1)}]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M')}}
+  });
+
+  // Mint vs Burn
+  const [smd, smm, smb] = thin(ST.day, ST.mint_m, ST.burn_m);
+  makeChart('chStableMB', {
+    type:'bar',
+    data:{datasets:[
+      {label:'Mint ($M)', data:smd.map((d,i)=>({x:d,y:smm[i]})), backgroundColor:hex2rgba('#3fb950',.5), borderWidth:0, barPercentage:1, categoryPercentage:1},
+      {label:'Burn ($M)', data:smd.map((d,i)=>({x:d,y:smb[i]!=null?-smb[i]:null})), backgroundColor:hex2rgba('#f85149',.5), borderWidth:0, barPercentage:1, categoryPercentage:1}
+    ]},
+    options:{scales:{x:timeAxis(), y:linAxis('$M',{stacked:true})}}
+  });
+};
+
+/* ---------- TAB 4: Z-Scores ---------- */
+builders.tab4 = function() {
+  const S = DATA.signal;
+  const el = document.getElementById('tab4');
+
+  const zKeys = ['z_dex','z_lending','z_stable_mint','z_stable_vel','z_bridge','z_cex_eth','z_cex_stable'];
+  const zLabels = ['DEX Volume','Lending','Stable Mint','Stable Velocity','Bridge','CEX ETH','CEX Stable'];
+  const zColors = ['#3fb950','#bc8cff','#d29922','#39d353','#f0883e','#f85149','#58a6ff'];
+
+  const kpiHtml = zKeys.map((k,i) => {
+    const v = last(S[k]);
+    return `<div class="kpi"><div class="label">${zLabels[i]}</div><div class="value" style="color:${v!=null&&v>=0?'var(--green)':'var(--red)'}">${v!=null?v.toFixed(3):'—'}</div></div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="kpi-row">${kpiHtml}</div>
+
+    <div class="chart-card">
+      <h3>All Z-Scores (Last 2 Years)</h3>
+      <div class="chart-wrap tall"><canvas id="chZAll"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Composite EMA with Regime Bands</h3>
+      <div class="chart-wrap tall"><canvas id="chZEma"></canvas></div>
+    </div>
+
+    <div class="section-title">Individual Z-Score Components</div>
+    <div class="row4" id="zSparklines">
+      ${zKeys.map((k,i) => `<div class="chart-card"><h3>${zLabels[i]}</h3><div class="chart-wrap mini"><canvas id="chZ_${i}"></canvas></div></div>`).join('')}
+    </div>
+  `;
+
+  // All z-scores (last 2 years)
+  const cutIdx = Math.max(0, S.day.length - 730);
+  const d2y = S.day.slice(cutIdx);
+  const zArrs2y = zKeys.map(k => S[k].slice(cutIdx));
+  const [tzd, ...tza] = thin(d2y, ...zArrs2y);
+  makeChart('chZAll', {
+    type:'line',
+    data:{datasets: zKeys.map((k,i) => ({label:zLabels[i], data:tzd.map((d,j)=>({x:d,y:tza[i][j]})), borderColor:zColors[i], borderWidth:1.5, pointRadius:0, fill:false}))},
+    options:{scales:{x:timeAxis(), y:linAxis('Z-Score')}, plugins:{annotation:{annotations:{
+      upper:{type:'line',yMin:0.5,yMax:0.5,borderColor:'rgba(63,185,80,.4)',borderWidth:1,borderDash:[4,4]},
+      lower:{type:'line',yMin:-0.5,yMax:-0.5,borderColor:'rgba(248,81,73,.4)',borderWidth:1,borderDash:[4,4]},
+      zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}
+    }}}}
+  });
+
+  // Composite EMA with regime bands
+  const [ted, tce] = thin(S.day, S.composite_ema);
+  const emaBands = regimeBands(S.day, S.regime);
+  emaBands.upper = {type:'line',yMin:0.15,yMax:0.15,borderColor:'rgba(63,185,80,.5)',borderWidth:1,borderDash:[4,4]};
+  emaBands.lower = {type:'line',yMin:-0.15,yMax:-0.15,borderColor:'rgba(248,81,73,.5)',borderWidth:1,borderDash:[4,4]};
+  emaBands.zero = {type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1};
+  makeChart('chZEma', {
+    type:'line',
+    data:{datasets:[{label:'Composite EMA', data:ted.map((d,i)=>({x:d,y:tce[i]})), borderColor:'#58a6ff', borderWidth:2, pointRadius:0, fill:false}]},
+    options:{scales:{x:timeAxis(), y:linAxis('Score')}, plugins:{annotation:{annotations:emaBands}}}
+  });
+
+  // 7 sparklines
+  zKeys.forEach((k, idx) => {
+    const [sd, sv] = thin(S.day, S[k]);
+    makeChart('chZ_'+idx, {
+      type:'line',
+      data:{datasets:[{data:sd.map((d,i)=>({x:d,y:sv[i]})), borderColor:zColors[idx], borderWidth:1.5, pointRadius:0, fill:true, backgroundColor:hex2rgba(zColors[idx],.1)}]},
+      options:{scales:{x:timeAxis(), y:linAxis()}, plugins:{legend:{display:false}, annotation:{annotations:{zero:{type:'line',yMin:0,yMax:0,borderColor:'rgba(139,148,158,.3)',borderWidth:1}}}}}
+    });
+  });
+};
+
+/* ---------- TAB 5: Graph-Analyse ---------- */
+builders.tab5 = function() {
+  const G = DATA.graph;
+  const el = document.getElementById('tab5');
+
+  const catCount = {};
+  G.category.forEach(c => catCount[c] = (catCount[c]||0) + 1);
+  const catColors = {cex:'#58a6ff', dex:'#3fb950', lending:'#bc8cff', bridge:'#f0883e', stablecoin:'#d29922', unknown:'#8b949e'};
+  const catNames = Object.keys(catCount).sort();
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Total Contracts</div><div class="value">${G.address.length}</div></div>
+      ${catNames.map(c => `<div class="kpi"><div class="label">${c.toUpperCase()}</div><div class="value" style="color:${catColors[c]||'#8b949e'}">${catCount[c]}</div></div>`).join('')}
+    </div>
+
+    <div class="row2">
+      ${ccH('chGDonut','Category Distribution','short')}
+      ${ccH('chGTop20','Top 20 Composite Score','')}
+    </div>
+    <div class="row2">
+      ${ccH('chGScatter','PageRank vs Betweenness','tall')}
+      ${ccH('chGFlow','Flow Volume per Category','short')}
+    </div>
+    ${ccH('chGPR','Top 20 PageRank','')}
+
+    <div class="section-title">Top Contracts by Category</div>
+    <div class="disc-cards" id="discCards"></div>
+
+    <div class="section-title">All Contracts</div>
+    <div class="filter-row" id="catFilters">
+      <button class="filter-btn active" data-cat="all">All</button>
+      ${catNames.map(c => `<button class="filter-btn" data-cat="${c}">${c.toUpperCase()}</button>`).join('')}
+    </div>
+    <div class="table-wrap" id="graphTableWrap"></div>
+  `;
+
+  // Category donut
+  makeChart('chGDonut', {
+    type:'doughnut',
+    data:{labels:catNames.map(c=>c.toUpperCase()), datasets:[{data:catNames.map(c=>catCount[c]), backgroundColor:catNames.map(c=>catColors[c]||'#8b949e'), borderWidth:0}]},
+    options:{cutout:'60%', plugins:{legend:{position:'bottom'}}}
+  });
+
+  // Top 20 composite score
+  const indices = G.composite_score.map((v,i)=>i).sort((a,b)=>G.composite_score[b]-G.composite_score[a]).slice(0,20);
+  makeChart('chGTop20', {
+    type:'bar',
+    data:{
+      labels: indices.map(i => G.known_name[i] || G.address[i].slice(0,10)),
+      datasets:[{label:'Composite Score', data:indices.map(i=>G.composite_score[i]), backgroundColor:indices.map(i=>catColors[G.category[i]]||'#8b949e')}]
+    },
+    options:{indexAxis:'y', scales:{x:linAxis('Score'), y:{ticks:{color:'#8b949e',font:{size:10}}}}, plugins:{legend:{display:false}}}
+  });
+
+  // Scatter PageRank vs Betweenness
+  const scatterData = {};
+  catNames.forEach(c => scatterData[c] = []);
+  G.category.forEach((c, i) => {
+    scatterData[c].push({x: G.pagerank[i], y: G.betweenness[i], label: G.known_name[i] || G.address[i].slice(0,10)});
+  });
+  makeChart('chGScatter', {
+    type:'scatter',
+    data:{datasets: catNames.map(c => ({
+      label: c.toUpperCase(),
+      data: scatterData[c],
+      backgroundColor: hex2rgba(catColors[c]||'#8b949e', .7),
+      borderColor: catColors[c]||'#8b949e',
+      borderWidth: 1,
+      pointRadius: 5
+    }))},
+    options:{scales:{x:linAxis('PageRank'), y:linAxis('Betweenness')}, plugins:{tooltip:{callbacks:{label:ctx=>{const p=ctx.raw;return `${p.label}: PR=${p.x.toFixed(4)} BW=${p.y.toFixed(4)}`;}}}}}
+  });
+
+  // Flow volume per category (log)
+  const catFlow = {};
+  catNames.forEach(c => catFlow[c] = 0);
+  G.category.forEach((c, i) => { catFlow[c] += (G.total_strength_usd[i] || 0); });
+  makeChart('chGFlow', {
+    type:'bar',
+    data:{labels:catNames.map(c=>c.toUpperCase()), datasets:[{label:'Total Flow ($)', data:catNames.map(c=>catFlow[c]), backgroundColor:catNames.map(c=>catColors[c]||'#8b949e')}]},
+    options:{scales:{x:{ticks:{color:'#8b949e'}}, y:logAxis('USD')}, plugins:{legend:{display:false}}}
+  });
+
+  // Top 20 PageRank
+  const prIdx = G.pagerank.map((v,i)=>i).sort((a,b)=>G.pagerank[b]-G.pagerank[a]).slice(0,20);
+  makeChart('chGPR', {
+    type:'bar',
+    data:{
+      labels: prIdx.map(i => G.known_name[i] || G.address[i].slice(0,10)),
+      datasets:[{label:'PageRank', data:prIdx.map(i=>G.pagerank[i]), backgroundColor:prIdx.map(i=>catColors[G.category[i]]||'#8b949e')}]
+    },
+    options:{indexAxis:'y', scales:{x:linAxis('PageRank'), y:{ticks:{color:'#8b949e',font:{size:10}}}}, plugins:{legend:{display:false}}}
+  });
+
+  // Discovery cards
+  let dcHtml = '';
+  catNames.forEach(c => {
+    const cidx = G.category.map((cat,i)=>cat===c?i:null).filter(v=>v!==null).sort((a,b)=>G.composite_score[b]-G.composite_score[a]).slice(0,5);
+    dcHtml += `<div class="disc-card"><h4 style="color:${catColors[c]||'#8b949e'}">${c.toUpperCase()}</h4>`;
+    cidx.forEach(i => {
+      dcHtml += `<div class="item"><span>${G.known_name[i]||G.address[i].slice(0,14)}</span><span>${G.composite_score[i].toFixed(3)}</span></div>`;
+    });
+    dcHtml += '</div>';
+  });
+  document.getElementById('discCards').innerHTML = dcHtml;
+
+  // Full table
+  let allRows = G.address.map((a,i)=>i);
+  let currentSort = {col:3, dir:-1};
+  let currentFilter = 'all';
+
+  function renderTable() {
+    let filtered = currentFilter === 'all' ? allRows : allRows.filter(i=>G.category[i]===currentFilter);
+    const col = currentSort.col, dir = currentSort.dir;
+    const getVal = (i) => {
+      switch(col) {
+        case 0: return G.known_name[i] || G.address[i];
+        case 1: return G.category[i];
+        case 2: return G.community_id[i];
+        case 3: return G.composite_score[i];
+        case 4: return G.pagerank[i];
+        case 5: return G.betweenness[i];
+        case 6: return G.weighted_degree[i];
+        case 7: return G.total_strength_usd[i];
+        case 8: return G.in_degree[i];
+        case 9: return G.out_degree[i];
+        default: return 0;
+      }
+    };
+    filtered.sort((a,b)=>{
+      const va=getVal(a), vb=getVal(b);
+      if (typeof va === 'string') return dir * va.localeCompare(vb);
+      return dir * (va - vb);
+    });
+
+    let html = '<table class="data-table" id="graphTable"><thead><tr>';
+    ['Name','Cat','Comm','Composite','PageRank','Between.','W.Degree','Flow USD','In-Deg','Out-Deg'].forEach((h,ci) => {
+      html += `<th data-col="${ci}">${h}${currentSort.col===ci?(currentSort.dir===-1?' &#9660;':' &#9650;'):''}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    filtered.forEach(i => {
+      html += `<tr>
+        <td title="${G.address[i]}">${G.known_name[i]||G.address[i].slice(0,14)}</td>
+        <td><span style="color:${catColors[G.category[i]]||'#8b949e'}">${G.category[i]}</span></td>
+        <td>${G.community_id[i]}</td>
+        <td>${G.composite_score[i].toFixed(4)}</td>
+        <td>${G.pagerank[i].toFixed(6)}</td>
+        <td>${G.betweenness[i].toFixed(6)}</td>
+        <td>${G.weighted_degree[i]!=null?G.weighted_degree[i].toFixed(4):'—'}</td>
+        <td>$${fmt(G.total_strength_usd[i])}</td>
+        <td>${G.in_degree[i]}</td>
+        <td>${G.out_degree[i]}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('graphTableWrap').innerHTML = html;
+
+    // Sort handlers
+    document.querySelectorAll('#graphTable th').forEach(th => {
+      th.addEventListener('click', () => {
+        const c = parseInt(th.dataset.col);
+        if (currentSort.col === c) currentSort.dir *= -1;
+        else { currentSort.col = c; currentSort.dir = -1; }
+        renderTable();
+      });
+    });
+  }
+
+  renderTable();
+
+  // Filter buttons
+  document.querySelectorAll('#catFilters .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#catFilters .filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.cat;
+      renderTable();
+    });
+  });
+};
+
+/* ===== INIT ===== */
+function init() {
+  document.getElementById('lastDate').textContent = DATA.overall_metrics.latest_date;
+  builders.tab1();
+  built.tab1 = true;
+}
+
+init();
+</script>
+</body>
+</html>
